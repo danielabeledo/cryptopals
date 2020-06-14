@@ -1,0 +1,9 @@
+[package]
+name = "challenge1"
+version = "0.1.0"
+authors = ["daniel"]
+edition = "2018"
+
+[dependencies]
+base64 = {version = "^0", path = "../../base64/"}
+hex = {version = "^0", path = "../../hex/"}
