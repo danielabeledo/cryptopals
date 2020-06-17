@@ -1,8 +1,8 @@
 [package]
-name = "base64"
+name = "challenge3"
 version = "0.1.0"
 authors = ["Daniel Abeledo <daniel.abeledo@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-lazy_static = "1.4.0"
+hex = {version = "^0", path = "../../hex/"}
