@@ -36,6 +36,7 @@ fn get_freq_dictionary() -> HashMap<char, i16> {
     }
     result
 }
+
 fn score_it(frequencies: &HashMap<char, i16>, input: String) -> i16 {
     let mut score: i16 = 0;
     for c in input.chars() {
