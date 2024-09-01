@@ -3,6 +3,3 @@ name = "hex"
 version = "0.1.0"
 authors = ["Daniel Abeledo <daniel.abeledo@gmail.com>"]
 edition = "2018"
-
-[dependencies]
-lazy_static = "1.4.0"

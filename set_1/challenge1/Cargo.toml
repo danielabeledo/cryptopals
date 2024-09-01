@@ -2,8 +2,8 @@
 name = "challenge1"
 version = "0.1.0"
 authors = ["Daniel Abeledo <daniel.abeledo@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-base64 = {version = "^0", path = "../../base64/"}
-hex = {version = "^0", path = "../../hex/"}
+base64 = {version = "^0", path = "../../base64"}
+hex = {version = "^0", path = "../../hex"}

@@ -14,7 +14,7 @@ How? Devise some method for "scoring" a piece of English plaintext. Character fr
 
 # Solution
 
-Scoring is happening base of frequency of letters in english - SPACE plus ETAOINSHRDLU
+Scoring is based on the frequency of the different letters in english - SPACE plus ETAOINSHRDLU
 
 http://www.macfreek.nl/memory/Letter_Distribution
 

@@ -1,18 +1,20 @@
 extern crate hex;
 
+use hex::{from_hex, to_hex};
 use std::env;
 
 fn fixed_xor(input: &str, xor: &str) -> String {
     if input.len() != xor.len() {
         panic!("Input and xor strings need to be same length");
     }
-    let input_hex: Vec<u8> = hex::from_hex(&input);
-    let input_xor: Vec<u8> = hex::from_hex(&xor);
-    let mut result: Vec<u8> = Vec::with_capacity(input_hex.len());
-    for (i, c) in input_hex.into_iter().enumerate() {
-        result.push(c ^ input_xor[i]);
-    }
-    hex::to_hex(result)
+
+    // xor'ing every byte
+    let xor: Vec<u8> = from_hex(&input).into_iter()
+        .zip(from_hex(&xor).into_iter())
+        .map(|(a, b)| a ^ b)
+        .collect();
+
+    to_hex(xor)
 }
 
 fn main() {
