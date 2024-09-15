@@ -2,21 +2,23 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 const DICTIONARY: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-fn to() -> &'static HashMap<u8, char> {
-    static HASHMAP: OnceLock<HashMap<u8, char>> = OnceLock::new();
-    HASHMAP.get_or_init(|| DICTIONARY.chars().enumerate().map(|(i, c)| (i as u8, c)).collect())
+fn to() -> &'static HashMap<u8, u8> {
+    static HASHMAP: OnceLock<HashMap<u8, u8>> = OnceLock::new();
+    HASHMAP.get_or_init(|| DICTIONARY.as_bytes().into_iter()
+        .enumerate().map(|(i, &c)| (i as u8, c)).collect())
 }
-fn from() -> &'static HashMap<char, u8> {
-    static HASHMAP: OnceLock<HashMap<char, u8>> = OnceLock::new();
-    HASHMAP.get_or_init(|| DICTIONARY.chars().enumerate().map(|(i, c)| (c, i as u8)).collect())
+fn from() -> &'static HashMap<u8, u8> {
+    static HASHMAP: OnceLock<HashMap<u8, u8>> = OnceLock::new();
+    HASHMAP.get_or_init(|| DICTIONARY.as_bytes().into_iter()
+        .enumerate().map(|(i, &c)| (c, i as u8)).collect())
 }
 
-fn get_to(value: u8) -> char {
+fn get_to(value: u8) -> u8 {
     *to().get(&value).unwrap()
 }
 
-fn get_from(value: char) -> u8 {
-    if value == '=' {
+fn get_from(value: u8) -> u8 {
+    if value == 0x3D {
         0b0
     } else {
         *from().get(&value).unwrap()
@@ -24,12 +26,12 @@ fn get_from(value: char) -> u8 {
 }
 
 // Gets a base64 encoded output for an array of bytes.
-pub fn to_base64(input: Vec<u8>) -> Vec<char> {
+pub fn to_base64(input: Vec<u8>) -> Vec<u8> {
     if input.len() == 0 {
         panic!("input cannot be empty");
     };
 
-    let mut result: Vec<char> = Vec::with_capacity(input.len() * 4 / 3);
+    let mut result: Vec<u8> = Vec::with_capacity(input.len() * 4 / 3);
     // every chunk of 3 bytes, gets encoded into 4 characters from a 6-bit 64 characters dictionary
     // i.e. base64 encoding converts 3 bytes into 4 chars
     for chunk in input.chunks(3) {
@@ -45,7 +47,6 @@ pub fn to_base64(input: Vec<u8>) -> Vec<char> {
             result.push(get_to(((chunk[1] & 0x0F) << 2) | ((chunk[2] & 0xC0) >> 6)));
             // takes last 6 bites from third byte
             result.push(get_to(chunk[2] & 0x3F));
-
         } else if chunk.len() == 2 {
             // for a 16 bits chunk, we will add 3 chars and one padding
 
@@ -54,59 +55,55 @@ pub fn to_base64(input: Vec<u8>) -> Vec<char> {
             // takes 4 bits from the second byte with two unset bits in the lsb side
             result.push(get_to((chunk[1] & 0x0F) << 2));
             // adds a padding char
-            result.push('=');
+            result.push(0x3D);
         } else {
             // in a 8 bits chunk, we will only be able to take 2 bits from the first byte
             result.push(get_to((chunk[0] & 0x03) << 4));
             // and then add 2 padding chars
-            result.push('=');
-            result.push('=');
+            result.push(0x3D);
+            result.push(0x3D);
         }
     }
     result
 }
 
 // Gets a byte array from a base64 input
-pub fn from_base64(input: Vec<char>) -> Vec<u8> {
+pub fn from_base64(input: &[u8]) -> Vec<u8> {
     if input.len() == 0 {
         panic!("input cannot be empty");
     };
+
+    if input.len() % 4 != 0 {
+        panic!("strict mode")
+    }
 
     let mut result: Vec<u8> = Vec::new();
     for chunk in input.chunks(4) {
         // every chunk of 4 chars, gets decoded into 3 bytes
         // i.e. base64 decodes to 3 bytes from 4 chars
-        if chunk.len() == 4 {
-            result.push(get_from(chunk[0]) << 2 | (get_from(chunk[1]) & 0x30) >> 4);
+        result.push(get_from(chunk[0]) << 2 | (get_from(chunk[1]) & 0x30) >> 4);
+        if chunk[2] != 0x3D || (get_from(chunk[1]) << 4) != 0 {
             result.push(get_from(chunk[1]) << 4 | (get_from(chunk[2]) & 0x3C) >> 2);
+        }
+        if chunk[3] != 0x3D || (get_from(chunk[2]) << 6) != 0 {
             result.push(get_from(chunk[2]) << 6 | get_from(chunk[3]));
-        } else if chunk.len() == 3 {
-            result.push(get_from(chunk[0]) << 2 | (get_from(chunk[1]) & 0x30) >> 4);
-            result.push(get_from(chunk[1]) << 4 | (get_from(chunk[2]) & 0x3C) >> 2);
-            result.push(get_from(chunk[2]) << 6);
-        } else if chunk.len() == 2 {
-            result.push(get_from(chunk[0]) << 2 | (get_from(chunk[1]) & 0x30) >> 4);
-            result.push(get_from(chunk[1]) << 4);
-        } else {
-            result.push(get_from(chunk[0]) << 2);
         }
     }
-    result.into_iter().filter(|&i| i != 0b0).collect::<Vec<_>>()
+    result.to_vec()
 }
 
 #[cfg(test)]
 mod tests {
     use super::from_base64;
     use super::to_base64;
-    use std::iter::FromIterator;
     use std::str;
 
     fn run_to(v: &str) -> String {
-        String::from_iter(to_base64(v.to_string().into_bytes()))
+        String::from_utf8(to_base64(v.as_bytes().to_vec())).unwrap()
     }
 
     fn run_from(s: &str) -> String {
-        let base64 = &from_base64(s.chars().collect());
+        let base64 = &from_base64(s.as_bytes());
         match str::from_utf8(base64) {
             Ok(value) => value.to_string(),
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),

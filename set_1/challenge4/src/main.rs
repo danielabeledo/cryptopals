@@ -18,10 +18,10 @@ fn single_xor(input: &str, xor: u8) -> String {
 // The values are normalised, meaning that space will appear aprox. 8 times
 // more often than the letter u.
 fn get_freq_dictionary() -> &'static HashMap<char, i16> {
-    let contents = fs::read_to_string("src/frequency.txt").expect("file doesn't exist");
     static HASHMAP: OnceLock<HashMap<char, i16>> = OnceLock::new();
     HASHMAP.get_or_init(||
-        contents.lines().map(|line| line.as_bytes()).map(|line| (
+        fs::read_to_string("src/frequency.txt").expect("file doesn't exist")
+            .lines().map(|line| line.as_bytes()).map(|line| (
             line[0] as char,
             from_utf8(&line[2..]).map(|s| s.parse::<i16>().unwrap()).unwrap())).collect()
     )

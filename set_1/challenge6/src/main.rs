@@ -1,138 +1,138 @@
-extern crate base64;
-
 use std::collections::HashMap;
 use std::fs;
-use std::str;
-
-fn hamming_distance_bits(input1: &[u8], input2: &[u8]) -> u32 {
-    let mut result: u32 = 0;
-    if input1.len() != input2.len() {
-        panic!("Input lengths don't match.")
-    }
-    for i in 0..input1.len() {
-        for j in 0..8 {
-            if input1[i] & (1 << j) != input2[i] & (1 << j) {
-                result = result + 1;
-            }
-        }
-    }
-    result
-}
-
-fn calculate(input: &Vec<u8>, keysize: usize) -> f32 {
-    let mut rs: u32 = 0;
-    let groups = input.len() / keysize - 1;
-    for i in 0..groups {
-        let first = &input[i * keysize..(i + 1) * keysize];
-        let second = &input[(i + 1) * keysize..(i + 2) * keysize];
-        rs = rs + hamming_distance_bits(first, second)
-    }
-
-    rs as f32 / keysize as f32 / groups as f32
-}
-
-fn calculate_range(input: &Vec<u8>) -> (usize, f32) {
-    let mut best_value: f32 = 100.0;
-    let mut best_key_size: usize = 0;
-    for i in 2..40 {
-        let value: f32 = calculate(&input, i);
-        println!("{:?} {:?}", i, value);
-        if value < best_value {
-            best_value = value;
-            best_key_size = i;
-        }
-    }
-    (best_key_size, best_value)
-}
+use std::iter::Iterator;
+use std::ops::RangeInclusive;
+use std::str::from_utf8;
+use std::sync::OnceLock;
+const KEY_SIZE_RANGE: RangeInclusive<usize> = 5..=40;
 
 fn main() {
     // load data from file into a byte array
-    let input: Vec<u8> = {
-        let mut vec: Vec<u8> = Vec::new();
-        for line in fs::read_to_string("./src/6.txt")
-            .expect("file not found")
-            .lines()
-        {
-            vec.append(&mut base64::from_base64(
-                line.trim().chars().collect::<Vec<char>>(),
-            ));
-        }
-        vec
-    };
-    // using hamming distance, find key size
-    let (key_size, score) = calculate_range(&input);
-    println!("Keysize is {:?} with score {:?}", key_size, score);
-    let key_size = 29;
-    // transpose blocks
-    let mut array: Vec<Vec<u8>> = vec![vec![0; input.len() / key_size + 1]; key_size];
-    for (i, b) in input.iter().enumerate() {
-        array[i % key_size][i / key_size] = *b;
-    }
+    let mut file_content: Vec<u8> = Vec::new();
+    fs::read_to_string("./src/6.txt")
+        .expect("file not found")
+        .lines()
+        .map(|line| line.as_bytes())
+        .for_each(|line| line.iter().for_each(|b| file_content.push(*b)));
 
-    let frequencies = get_freq_dictionary();
+    let input: Vec<u8> = base64::from_base64(file_content.as_slice());
+
+    // using hamming distance, find key size
+    let (key_size, score) = calculate_key_size(&input);
+    println!("Key size is {} with score {}", key_size, score);
+
+    // transpose blocks
+    let mut original: Vec<Vec<u8>> = vec![vec![0; key_size]; input.len() / key_size + 1];
+    for (i, b) in input.iter().enumerate() {
+        original[i / key_size][i % key_size] = *b;
+    }
+    let transposed = transpose(original);
+
     // find single key xor for each transposed block
     let mut xor_key: Vec<u8> = Vec::with_capacity(key_size);
-    for vector in array {
-        let mut best_score: i16 = 0;
-        let mut solution = 0;
-        for c in 0..255 {
-            let result: Vec<u8> = single_xor(&vector, c as u8);
-            let score = score_it(&frequencies, result);
-            if score >= best_score {
-                best_score = score;
-                solution = c;
-            }
-        }
-        xor_key.push(solution);
+    for vector in transposed {
+        // loop through all potential character-solutions and score the solutions based on the
+        // frequency histogram - the one with the max value is the result.
+        xor_key.push(get_vignere_key_char(&vector));
     }
-    println!("{:?}", str::from_utf8(&xor_key));
+    println!("XOR key is {:?}", from_utf8(&xor_key).unwrap());
 
     let mut output = Vec::with_capacity(input.len());
     for (i, b) in input.iter().enumerate() {
         output.push(b ^ xor_key[i % key_size]);
     }
-    println!("{:?}", str::from_utf8(output.as_slice()));
-
-    let value = hamming_distance_bits("this is a test".as_bytes(), "wokka wokka!!!".as_bytes());
-    println!("{:?}", value);
+    println!("{}", from_utf8(&output).unwrap());
 }
 
-fn single_xor(input: &Vec<u8>, xor: u8) -> Vec<u8> {
-    let mut result: Vec<u8> = Vec::with_capacity(input.len());
-    for c in input.into_iter() {
-        result.push(c ^ xor);
-    }
-    result
+///
+/// Transposing a matrix (vec of vecs)
+///
+fn transpose(v: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    let len = v[0].len();
+    let mut iters: Vec<_> = v.into_iter().map(|n| n.into_iter()).collect();
+    (0..len)
+        .map(|_| {
+            iters
+                .iter_mut()
+                .map(|n| n.next().unwrap())
+                .collect::<Vec<u8>>()
+        })
+        .collect()
 }
 
-fn get_freq_dictionary() -> HashMap<u8, i16> {
-    let mut result: HashMap<u8, i16> = HashMap::with_capacity(13);
-    for (c, i) in [
-        (' ', 8),
-        ('e', 5),
-        ('t', 3),
-        ('a', 3),
-        ('o', 3),
-        ('i', 3),
-        ('n', 3),
-        ('s', 2),
-        ('r', 2),
-        ('h', 2),
-        ('l', 1),
-        ('d', 1),
-        ('u', 1),
-    ]
-    .iter_mut()
-    {
-        result.insert(*c as u8, *i);
-    }
-    result
+///
+/// Gets a single Char for a Vigenère XOR key
+///
+fn get_vignere_key_char(vector: &Vec<u8>) -> u8 {
+    (0..128_u8).into_iter()
+        .map(|c| (c, vector.iter().map(|b| *b ^ c)
+            .map(|c| get_freq_dictionary().get(&c).unwrap_or(&0))
+            .sum::<u32>()))
+        .max_by(|(_, c1), (_, c2)| c1.partial_cmp(&c2).unwrap())
+        .unwrap().0
+}
+///
+/// Calculating a probable Key Size for our Vigenère XOR key
+///
+fn calculate_key_size(input: &Vec<u8>) -> (usize, f32) {
+    KEY_SIZE_RANGE
+        .map(|i| (i, calculate(&input, i)))
+        .min_by(|(_, c1), (_, c2)| c1.partial_cmp(&c2).unwrap())
+        .unwrap()
 }
 
-fn score_it(frequencies: &HashMap<u8, i16>, input: Vec<u8>) -> i16 {
-    let mut score: i16 = 0;
-    for c in input {
-        score = score + frequencies.get(&c).unwrap_or(&0);
+///
+/// Calculate average Hamming distance of a collection of
+/// byte arrays with size {key_size}.
+///
+fn calculate(input: &Vec<u8>, key_size: usize) -> f32 {
+    let groups: usize = input.len() / key_size;
+
+    (0..groups - 1)
+        .map(|i| hamming_distance_bits(
+            &input[(i * key_size)..(i + 1) * key_size],
+            &input[(i + 1) * key_size..(i + 2) * key_size],
+        )).sum::<u32>() as f32 / key_size as f32 / groups as f32
+}
+
+///
+/// Calculating Hamming distance between two arrays of same length
+/// https://en.wikipedia.org/wiki/Hamming_distance
+///
+fn hamming_distance_bits(input1: &[u8], input2: &[u8]) -> u32 {
+    if input1.len() != input2.len() {
+        panic!("Input lengths don't match.")
     }
-    score
+    input1.iter()
+        .zip(input2)
+        .fold(0, |a, (b, c)| a + (*b ^ *c).count_ones())
+}
+
+///
+/// This is a normalised frequency dictionary of some of the most used
+/// characters in the english language, starting with the space character.
+/// The values are normalised, meaning that space will appear aprox. 8 times
+/// more often than the letter u.
+///
+fn get_freq_dictionary() -> &'static HashMap<u8, u32> {
+    static HASHMAP: OnceLock<HashMap<u8, u32>> = OnceLock::new();
+    HASHMAP.get_or_init(||
+        fs::read_to_string("src/frequency.txt").expect("file doesn't exist")
+            .lines()
+            .map(|line| line.as_bytes())
+            .map(|line| (line[0], from_utf8(&line[2..])
+                .map(|s| s.parse::<u32>().unwrap())
+                .unwrap()))
+            .collect()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::hamming_distance_bits;
+
+    #[test]
+    fn test_hamming_distance_bits() {
+        assert_eq!(37, hamming_distance_bits("this is a test".as_bytes(), "wokka wokka!!!".as_bytes()));
+    }
 }
