@@ -1,0 +1,8 @@
+[package]
+name = "challenge10"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = { version = "^0", path = "../../base64" }
+openssl = "0.10.66"
