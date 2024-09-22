@@ -1,0 +1,8 @@
+[package]
+name = "challenge11"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openssl = "0.10.66"
+rand = "0.8.5"
